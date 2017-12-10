@@ -11,6 +11,8 @@
 
 #include <math.h>
 
+#include <stdlib.h>
+
 #include "opencv2/core/core.hpp"
 
 #include "opencv2/imgproc/imgproc.hpp"
@@ -75,7 +77,7 @@ void findContours(const cv::Mat &image, int numCards,
 
     // Find the most common contours
     std::sort(contours.begin(), contours.end(), reverseCompareContourArea);
-    cardsContours(&data[0],&data[numCards]);
+    cardsContours(&contours[0], &contours[numCards]);
 }
 
 void transformCardContours(const cv::Mat &image, const std::vector<cv::Mat> &cards,
@@ -91,6 +93,38 @@ void transformCardContours(const cv::Mat &image, const std::vector<cv::Mat> &car
 
         cv::warpPerspective(image, card, perspectivePoints, cv::Size(500, 500));
         cards.push_back(card);
+    }
+}
+
+void learnCards(const std:vector<cv::Mat> &cards, 
+        const std::vector<std::string> cardNames, 
+        const std::map<std::string, cv::Mat> &cardDataset)
+{
+    if (cards.size() != cardNames.size())
+        return;
+
+    for (int i = 0; i < cards.size(); i++)
+        cardDataset[cardNames.at(i)] = cards.at(i);
+}
+
+void getClosestCard(const cv::Mat &card, const std::map<std::string, cv::Mat> &cards, 
+        const std::string &cardName)
+{
+    int i = -1;
+    int diff = 0, tmpDiff = 0;
+    std::map<std::string, cv::Mat>::iterator it = cards.begin();
+
+    while(it != cards.end()) {
+        if (!++i)
+            diff = abs(card - it->second);
+        else {
+            tmpDiff = abs(card - it->second);
+            if (tmpDiff < diff) {
+                diff = tmpDiff;
+                cardName = it->first;
+            }
+        }
+        it++;
     }
 }
 
