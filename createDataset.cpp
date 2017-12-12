@@ -19,86 +19,88 @@
 
 #include "opencv2/highgui/highgui.hpp"
 
+using namespace std;
+using namespace cv;
 
-// AUXILIARY  FUNCTION
 
-void printImageFeatures(const cv::Mat &image)
+void printImageFeatures(const Mat &image)
 {
-	std::cout << std::endl;
+	cout << endl;
 
-	std::cout << "Number of rows : " << image.size().height << std::endl;
+	cout << "Number of rows : " << image.size().height << endl;
 
-	std::cout << "Number of columns : " << image.size().width << std::endl;
+	cout << "Number of columns : " << image.size().width << endl;
 
-	std::cout << "Number of channels : " << image.channels() << std::endl;
+	cout << "Number of channels : " << image.channels() << endl;
 
-	std::cout << "Number of bytes per pixel : " << image.elemSize() << std::endl;
+	cout << "Number of bytes per pixel : " << image.elemSize() << endl;
 
-	std::cout << std::endl;
+	cout << endl;
 }
 
-void preProcessImage(const cv::Mat &originalImage)
+void preProcessImage(const Mat &originalImage)
 {
     // Convert to a single-channel, intensity image
     if (originalImage.channels() > 1)
-	    cv::cvtColor(originalImage, originalImage, cv::COLOR_BGR2GRAY, 1);
+	    cvtColor(originalImage, originalImage, COLOR_BGR2GRAY, 1);
 
     // Apply Gaussian Filter to get only the countour of the symbols and
     // remove all the artifacts
     int n = 3;
     double sigmaX = 100.0;
-    cv::GaussianBlur(orginalImage, originalImage, cv::Size(n, n), sigmaX);
+    GaussianBlur(originalImage, originalImage, Size(n, n), sigmaX);
 
     // Apply threshold
     int thresholdValue = 120;
-    int thresholdType = cv::THRESH_BINARY;
+    int thresholdType = THRESH_BINARY;
     int maxValue = 255;
-    cv::threshold( originalImage, originalImage, 
+    threshold( originalImage, originalImage, 
             thresholdValue, maxValue, thresholdType);
 }
 
 // From: https://stackoverflow.com/questions/13495207/opencv-c-sorting-contours-by-their-contourarea
-bool reverseCompareContourArea(std::vector<cv::Point2f> c1, 
-        std::vector<cv::Point2f> c2)
+bool reverseCompareContourArea(vector<Point2f> c1, 
+        vector<Point2f> c2)
 {
-    return fabs(cv::contourArea(cv::Mat(c1))) 
-        > fabs(cv::contourArea(cv::Mat(c2)));
+    return fabs(contourArea(Mat(c1))) 
+        > fabs(contourArea(Mat(c2)));
 }
 
-void findContours(const cv::Mat &image, int numCards,
-        const std::vector<std::vector<cv::Point2f> > &cardsContours)
+void findContours(const Mat &image, int numCards,
+        const vector<vector<Point2f> > &cardsContours)
 {
-    std::vector<std::vector<cv::Point2f> > contours;
-    std::vector<cv::Vec4i> hierarchy;
-    int mode = cv::CV_RETR_TREE;
-    int method = cv::CV_CHAIN_APPROX_SIMPLE;
+    vector<vector<Point2f> > contours;
+    vector<Vec4i> hierarchy;
+    int mode = RETR_TREE;
+    int method = CHAIN_APPROX_SIMPLE;
 
     findContours(image, contours, hierarchy, mode, method);
 
     // Find the most common contours
-    std::sort(contours.begin(), contours.end(), reverseCompareContourArea);
-    cardsContours(&contours[0], &contours[numCards]);
+    sort(contours.begin(), contours.end(), reverseCompareContourArea);
+    //cardsContours = contours;
+    //cardsContours(&contours[0], &contours[numCards]);
 }
 
-void transformCardContours(const cv::Mat &image, const std::vector<cv::Mat> &cards,
-        const std::vector<std::vector<cv::Point> > &cardsContours)
+void transformCardContours(const Mat &image, const vector<Mat> &cards,
+        const vector<vector<Point> > &cardsContours)
 {
-    cv::Point2f *points, *perspectivePoints;
-    cv::Mat card;
+    Point2f *points, *perspectivePoints;
+    Mat card;
 
     // Transform perspective card into a 500x500 image card
     for (int i = 0; i < cardsContours.size(); i++) {
-        points = &cardsContours[0][0];
-        cv::getPerspectiveTransform(points, perspectivePoints);
+        points = cardsContours[i];
+        getPerspectiveTransform(points, perspectivePoints);
 
-        cv::warpPerspective(image, card, perspectivePoints, cv::Size(500, 500));
+        warpPerspective(image, card, perspectivePoints, Size(500, 500));
         cards.push_back(card);
     }
 }
 
-void learnCards(const std:vector<cv::Mat> &cards, 
-        const std::vector<std::string> cardNames, 
-        const std::map<std::string, cv::Mat> &cardDataset)
+void learnCards(const std:vector<Mat> &cards, 
+        const vector<string> cardNames, 
+        const map<string, Mat> &cardDataset)
 {
     if (cards.size() != cardNames.size())
         return;
@@ -107,12 +109,12 @@ void learnCards(const std:vector<cv::Mat> &cards,
         cardDataset[cardNames.at(i)] = cards.at(i);
 }
 
-void getClosestCard(const cv::Mat &card, const std::map<std::string, cv::Mat> &cards, 
-        const std::string &cardName)
+void getClosestCard(const Mat &card, const map<string, Mat> &cards, 
+        const string &cardName)
 {
     int i = -1;
     int diff = 0, tmpDiff = 0;
-    std::map<std::string, cv::Mat>::iterator it = cards.begin();
+    map<string, Mat>::iterator it = cards.begin();
 
     while(it != cards.end()) {
         if (!++i)
@@ -128,55 +130,69 @@ void getClosestCard(const cv::Mat &card, const std::map<std::string, cv::Mat> &c
     }
 }
 
-
-// MAIN
-
 int main( int argc, char** argv )
 {
+    /*
     if( argc != 2 )
     {
-		std::cout << "The name of the image file is missing !!" << std::endl;
+		cout << "The name of the image file is missing !!" << endl;
 
         return -1;
     }
 
-	cv::Mat originalImage;
+    Mat originalImage;
 
-	originalImage = cv::imread( argv[1], cv::IMREAD_UNCHANGED );
+	originalImage = imread( argv[1], IMREAD_UNCHANGED );
 
 	if( originalImage.empty() )
 	{
 		// NOT SUCCESSFUL : the data attribute is empty
 
-		std::cout << "Image file could not be open !!" << std::endl;
+		cout << "Image file could not be open !!" << endl;
 
 	    return -1;
 	}
+    */
 
-	
-	// Create window
+    /* Read camera */
+    
+    // open default camera 
+    VideoCapture cap(0);
+    
+    if(!cap.isOpened())
+        cout << "Could not read camera" << endl;
 
-    cv::namedWindow( "Imagem Original", cv::WINDOW_AUTOSIZE );
+    namedWindow("Camera", 1);
+    
+    while(true)
+    {
+        Mat frame;
+        // get a new frame from camera
+        cap >> frame;
+        imshow("Camera", frame);
+        if(waitKey(30) >= 0) break;
+    }
+    
+    /*
+    // Create window
+
+    namedWindow( "Imagem Original", WINDOW_AUTOSIZE );
 
 	// Display image
 
-	cv::imshow( "Imagem Original", originalImage );
+	imshow( "Imagem Original", originalImage );
 
 	// Print some image features
 
-	std::cout << "ORIGINAL IMAGE" << std::endl;
+	cout << "ORIGINAL IMAGE" << endl;
 
     printImageFeatures( originalImage );
 
     
-    
-    // Waiting
-
-    cv::waitKey( 0 );
-
 	// Destroy the windows
 
-	cv::destroyAllWindows();
+	destroyAllWindows();
+    */
 
 	return 0;
 }
