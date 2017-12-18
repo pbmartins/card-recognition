@@ -40,7 +40,7 @@ void printImageFeatures(const Mat &image)
 	cout << endl;
 }
 
-void preProcessImage(const Mat &originalImage)
+void preProcessImage(Mat &originalImage)
 {
     // Convert to a single-channel, intensity image
     if (originalImage.channels() > 1)
@@ -58,6 +58,7 @@ void preProcessImage(const Mat &originalImage)
     int maxValue = 255;
     threshold( originalImage, originalImage, 
             thresholdValue, maxValue, thresholdType);
+
 }
 
 // From: https://stackoverflow.com/questions/13495207/opencv-c-sorting-contours-by-their-contourarea
@@ -69,19 +70,27 @@ bool reverseCompareContourArea(vector<Point2f> c1,
 }
 
 void findContours(const Mat &image, int numCards,
-        vector<vector<Point2f> > &cardsContours)
+        vector<vector<Point> > &cardsContours)
 {
-    vector<vector<Point2f> > contours;
-    vector<Vec4i> hierarchy;
-    int mode = RETR_TREE;
-    int method = CHAIN_APPROX_SIMPLE;
+    vector<vector<Point> > contours;
+    //vector<Vec4i> hierarchy;
+    Mat cannyOutput;
+    int mode = CV_RETR_TREE;
+    int method = CV_CHAIN_APPROX_SIMPLE;
 
-    findContours(image, contours, hierarchy, mode, method);
+    printf("Finding contours");
+    Canny(image, cannyOutput, 120, 240);
+    printf("Applied canny");
 
+    //findContours(cannyOutput, contours, hierarchy, mode, method);
+    findContours(cannyOutput, cardsContours, mode, method, Point(0, 0));
+
+    printf("Countours found");
     // Find the most common contours
-    sort(contours.begin(), contours.end(), reverseCompareContourArea);
-    cardsContours = contours;
-    cardsContours.resize(numCards);
+    //sort(contours.begin(), contours.end(), reverseCompareContourArea);
+    //cardsContours = contours;
+    //cardsContours.resize(numCards);
+    printf("\nCards resized");
 }
 
 void transformCardContours(const Mat &image, vector<Mat> &cards,
@@ -93,9 +102,16 @@ void transformCardContours(const Mat &image, vector<Mat> &cards,
     // Transform perspective card into a 500x500 image card
     for (int i = 0; i < cardsContours.size(); i++) {
         points = cardsContours[i];
+        printf("finding perspective for %d", i);
+
+        // TODO: function not correctly called
         getPerspectiveTransform(points, perspectivePoints);
+        printf("Found perspective for %d", i);
+
 
         warpPerspective(image, card, perspectivePoints, Size(500, 500));
+        printf("Found warp perspective for %d", i);
+
         cards.push_back(card);
     }
 }
@@ -145,13 +161,14 @@ void getClosestCard(Mat &card, map<string, Mat> &cards,
 
 int main( int argc, char** argv )
 {
-    /*
+    
     if( argc != 2 )
     {
 		cout << "The name of the image file is missing !!" << endl;
 
         return -1;
     }
+
 
     Mat originalImage;
 
@@ -165,12 +182,25 @@ int main( int argc, char** argv )
 
 	    return -1;
 	}
-    */
+
+    preProcessImage(originalImage);
+    vector<vector<Point> > cardsContours;
+    findContours(originalImage, 1, cardsContours);
+    vector<Mat> cards;
+    transformCardContours(originalImage, cards, cardsContours);
+    
+    Mat img = cards[0];
+
+    namedWindow( "Imagem Original", WINDOW_AUTOSIZE );
+	imshow( "Imagem Original", img );
+    waitKey(0);
+    destroyAllWindows();
+    
 
     /* Read camera */
     
     // open default camera 
-    VideoCapture cap(0);
+    /*VideoCapture cap(0);
     
     if(!cap.isOpened())
         cout << "Could not read camera" << endl;
@@ -184,7 +214,7 @@ int main( int argc, char** argv )
         cap >> frame;
         imshow("Camera", frame);
         if(waitKey(30) >= 0) break;
-    }
+    }*/
     
     /*
     // Create window
