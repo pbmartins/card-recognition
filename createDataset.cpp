@@ -11,6 +11,8 @@
 
 #include <math.h>
 
+#include <map>
+
 #include <stdlib.h>
 
 #include "opencv2/core/core.hpp"
@@ -67,7 +69,7 @@ bool reverseCompareContourArea(vector<Point2f> c1,
 }
 
 void findContours(const Mat &image, int numCards,
-        const vector<vector<Point2f> > &cardsContours)
+        vector<vector<Point2f> > &cardsContours)
 {
     vector<vector<Point2f> > contours;
     vector<Vec4i> hierarchy;
@@ -78,14 +80,14 @@ void findContours(const Mat &image, int numCards,
 
     // Find the most common contours
     sort(contours.begin(), contours.end(), reverseCompareContourArea);
-    //cardsContours = contours;
-    //cardsContours(&contours[0], &contours[numCards]);
+    cardsContours = contours;
+    cardsContours.resize(numCards);
 }
 
-void transformCardContours(const Mat &image, const vector<Mat> &cards,
+void transformCardContours(const Mat &image, vector<Mat> &cards,
         const vector<vector<Point> > &cardsContours)
 {
-    Point2f *points, *perspectivePoints;
+    vector<Point> points, perspectivePoints;
     Mat card;
 
     // Transform perspective card into a 500x500 image card
@@ -98,9 +100,9 @@ void transformCardContours(const Mat &image, const vector<Mat> &cards,
     }
 }
 
-void learnCards(const std:vector<Mat> &cards, 
+void learnCards(const vector<Mat> &cards, 
         const vector<string> cardNames, 
-        const map<string, Mat> &cardDataset)
+        map<string, Mat> &cardDataset)
 {
     if (cards.size() != cardNames.size())
         return;
@@ -109,18 +111,29 @@ void learnCards(const std:vector<Mat> &cards,
         cardDataset[cardNames.at(i)] = cards.at(i);
 }
 
-void getClosestCard(const Mat &card, const map<string, Mat> &cards, 
-        const string &cardName)
+int countBinaryWhite(Mat card) {
+    int count = 0;
+    for (int i = 0; i < card.rows; i++) {
+        for (int j = 0; j < card.cols; j++) {
+            if (card.at<uchar>(i, j) == 255)
+                count++;
+        }
+    }
+    return count;
+}
+
+void getClosestCard(Mat &card, map<string, Mat> &cards, 
+        string &cardName)
 {
     int i = -1;
-    int diff = 0, tmpDiff = 0;
+    int diff, tmpDiff;
     map<string, Mat>::iterator it = cards.begin();
 
     while(it != cards.end()) {
         if (!++i)
-            diff = abs(card - it->second);
+            diff = countBinaryWhite(abs(card - it->second));
         else {
-            tmpDiff = abs(card - it->second);
+            tmpDiff = countBinaryWhite(abs(card - it->second));
             if (tmpDiff < diff) {
                 diff = tmpDiff;
                 cardName = it->first;
