@@ -1,7 +1,7 @@
 /*
  * card_recognition.cpp
  *
- * DATASET GENERATOR
+ * CARD RECOGNITION
  *
  * Diogo Ferreira - Pedro Martins - 2017
  */
@@ -41,14 +41,11 @@ void preProcessImage(Mat &originalImage)
     GaussianBlur(originalImage, originalImage, Size(n, n), sigmaX);
 
     // Apply threshold
-    int thresholdValue = 200;
+    int thresholdValue = 150;
     int thresholdType = THRESH_BINARY;
     int maxValue = 255;
     threshold( originalImage, originalImage, 
             thresholdValue, maxValue, thresholdType);
-    
-    // Resize image to allow diff calculations 
-    resize(originalImage, originalImage, Size(450, 480));
 }
 
 // From: https://stackoverflow.com/questions/13495207/opencv-c-sorting-contours-by-their-contourarea
@@ -58,21 +55,55 @@ bool reverseCompareContourArea(vector<Point> c1,
     return contourArea(c1, false) > contourArea(c2, false);
 }
 
+// Adapted from: https://www.pyimagesearch.com/2016/03/21/ordering-coordinates-clockwise-with-python-and-opencv/
+void orderPointsCC(const vector<Point2f> &points, Point2f* orderedPoints) 
+{
+    int sMax = 0, sMin = 0, dMax = 0, dMin = 0;
+    
+    // Bottom-left will have the smallest sum
+    // Top-right will have the bigger sum
+    for (int i = 0; i < points.size(); i++) {
+        double sum = points[i].x + points[i].y;
+        if (sum > (points[sMax].x + points[sMax].y)) 
+            sMax = i;
+        if (sum < (points[sMin].x + points[sMin].y)) 
+            sMin = i;
+    }
+    
+    // Bottom-right will have the smallest difference
+    // Top-left will have the bigger difference
+    for (int i = 0; i < points.size(); i++) {
+        if (i == sMax or i == sMin) 
+            continue;
+
+        double diff = points[i].x - points[i].y;
+         
+        if (diff < (points[dMax].x - points[dMax].y)) 
+            dMin = i;
+        if (diff > (points[dMin].x - points[dMin].y)) 
+            dMax = i;
+    }
+    
+    orderedPoints[0] = points[sMin];
+    orderedPoints[1] = points[dMax];
+    orderedPoints[2] = points[sMax];
+    orderedPoints[3] = points[dMin];
+}
+
 void findContours(const Mat &image, int numCards,
         vector<vector<Point> > &cardsContours)
 {
-    vector<vector<Point> > contours;
     //vector<Vec4i> hierarchy;
     Mat cannyOutput;
     int mode = CV_RETR_TREE;
     int method = CV_CHAIN_APPROX_SIMPLE;
 
     Canny(image, cannyOutput, 120, 240);
-    
+
     findContours(cannyOutput, cardsContours, mode, method, Point(0, 0));
 
     // Find the most common contours
-    sort(contours.begin(), contours.end(), reverseCompareContourArea);
+    sort(cardsContours.begin(), cardsContours.end(), reverseCompareContourArea);
     cardsContours.resize(numCards);
 }
 
@@ -88,70 +119,57 @@ void transformCardContours(const Mat &image, vector<Mat> &cards,
 
         points = cardsContours[i];
         
-        double epsilon = 0.1 * arcLength(points, true);
+        // Compute approximation accuracy
+        double epsilon = 0.02 * arcLength(points, true);
         vector<Point> approxCurve;
         approxPolyDP(points, approxCurve, epsilon, true);
+        // Get rectangle of the minimum area
         RotatedRect boxRect = minAreaRect(approxCurve);
         
         /* 
         // Debug rect
-        Mat drawing = Mat::zeros( image.size(), CV_8UC3 );
-        Scalar color = Scalar(255, 255, 255);
+        Mat drawing = image.clone();
+        Scalar color = Scalar(128, 128, 128);
         // contour
-        drawContours( drawing, cardsContours, i, color, 1, 8, vector<Vec4i>(), 0, Point() );
+        //drawContours( drawing, cardsContours, i, color, 5, 8, vector<Vec4i>(), 0, Point() );
         Point2f rect_points[4]; boxRect.points( rect_points );
         for( int j = 0; j < 4; j++ )
-          line( drawing, rect_points[j], rect_points[(j+1)%4], color, 1, 8 );
+          line( drawing, rect_points[j], rect_points[(j+1)%4], color, 5, 8 );
          
         /// Show in a window
         namedWindow( "Contours", CV_WINDOW_AUTOSIZE );
         imshow( "Contours", drawing ); 
         */
-
-        Point2f pts[4];
-        boxRect.points(pts);
-
-        Point2f src_vertices[4];
         
         // Correct order 
-        //  2--3
+        //  3--2
         //  |  |
-        //  0--1 
-        src_vertices[0] = pts[1];
-        src_vertices[1] = pts[2];
-        src_vertices[2] = pts[0];
-        src_vertices[3] = pts[3];
+        //  0--1
         
-        //src_vertices[0] = pts[1];
-        //src_vertices[1] = pts[0];
-        //src_vertices[2] = pts[2];
-        //src_vertices[3] = pts[3];
+        Point2f srcVertices[4];
+        Point2f dstVertices[4];
         
-        Point2f dst_vertices[4];
-        dst_vertices[0] = Point2f(0, 0);
-        dst_vertices[1] = Point2f(449, 0); 
-        dst_vertices[3] = Point2f(449, 449);        
-        dst_vertices[2] = Point2f(0, 449);        
-
-        //Mat warpAffineMatrix = getAffineTransform(src_vertices, dst_vertices);
-        Mat transform = getPerspectiveTransform(src_vertices, dst_vertices);
-        cv::Size size(450, 480);
-        //warpAffine(image, card, warpAffineMatrix, size, INTER_LINEAR, BORDER_CONSTANT);
-        warpPerspective(image, card, transform, size);
+        // Vertices of the rect box 
+        dstVertices[0] = Point2f(0, 0);
+        dstVertices[1] = Point2f(449, 0); 
+        dstVertices[2] = Point2f(449, 449);        
+        dstVertices[3] = Point2f(0, 449);        
         
-        /*
-        boxRect.center = Point(image.cols/2, image.rows/2);
-
-        // Get the Rotation Matrix
-        Mat M = getRotationMatrix2D(boxRect.center, 180, 1.0);
-        // Perform the affine transformation
-        warpAffine(image, card, M, image.size(), INTER_CUBIC);
-        */
+        boxRect.points(srcVertices); 
+        
+        // Order vertices counter clockwise
+        vector<Point2f> vertices(begin(srcVertices), end(srcVertices));
+        orderPointsCC(vertices, srcVertices);
+        
+        // Get the transformation matrix
+        Mat transform = getPerspectiveTransform(srcVertices, dstVertices);
+        // Perform the transformation
+        warpPerspective(image, card, transform, Size(450, 450));
+        
         imwrite("rotated.jpg", card);
         
         cards.push_back(card);
     }
-    
 }
 
 void getTrainingSet(const string path, 
@@ -195,17 +213,23 @@ void getClosestCard(Mat &card, map<string, Mat> &cards,
     map<string, Mat>::iterator it = cards.begin();
 
     while(it != cards.end()) {
+        Mat compare_card = it->second;
         
-	    // Display difference
+        if (compare_card.size() != Size(450, 450))
+            // Resize image to allow diff calculations 
+            resize(compare_card, compare_card, Size(450, 450));
+
+        /*
+        // Display difference
         namedWindow( "Imagem Original"+i, WINDOW_AUTOSIZE );
-	    imshow("Imagem Original"+i, abs(card - it->second));
-        
+	    imshow("Imagem Original"+i, abs(compare_card - card));
+        */
 
         if (!++i){
-            diff = countBinaryWhite(abs(card - it->second));
+            diff = countBinaryWhite(abs(compare_card - card));
             cardName = it->first;
         } else {
-            tmpDiff = countBinaryWhite(abs(card - it->second));
+            tmpDiff = countBinaryWhite(abs(compare_card - card));
             if (tmpDiff < diff) {
                 diff = tmpDiff;
                 cardName = it->first;
@@ -213,6 +237,8 @@ void getClosestCard(Mat &card, map<string, Mat> &cards,
         }
         it++;
     }
+
+
 }
 
 int main( int argc, char** argv )
@@ -241,13 +267,15 @@ int main( int argc, char** argv )
 		cout << "Image file could not be open !!" << endl;
 	    return -1;
 	}
-
+    
     preProcessImage(originalCard);
-    /*
+    
+    /* 
     // Display transformation
     namedWindow("Transformed", WINDOW_AUTOSIZE );
     imshow("Transformed", originalCard);
     */
+
     vector<vector<Point> > cardsContours;
     findContours(originalCard, numCards, cardsContours);
     vector<Mat> cards;
@@ -260,28 +288,53 @@ int main( int argc, char** argv )
 		cout << "\nClosest card = " + closestCard << endl;
     }
 
-    waitKey(0);
-    destroyAllWindows();
+    //waitKey(0);
+    //destroyAllWindows();
     
-    /* Read camera */
+    /*
+    // Read camera
     
     // open default camera 
-    /*VideoCapture cap(0);
+    VideoCapture cap(1);
     
     if(!cap.isOpened())
         cout << "Could not read camera" << endl;
 
-    namedWindow("Camera", 1);
+    //namedWindow("Camera", 1);
     
     while(true)
     {
         Mat frame;
         // get a new frame from camera
         cap >> frame;
-        imshow("Camera", frame);
-        if(waitKey(30) >= 0) break;
-    }*/
     
+        imshow("Camera", frame);
+
+        int key = waitKey(30);
+        
+        // Enter
+        if(key == 10) {
+            preProcessImage(frame);
+            // Display transformation
+            namedWindow("Transformed", WINDOW_AUTOSIZE );
+            imshow("Transformed", originalCard);
+            vector<vector<Point> > cardsContours;
+            findContours(frame, numCards, cardsContours);
+            vector<Mat> cards;
+            transformCardContours(frame, cards, cardsContours);
+        
+            for (int i = 0; i < cards.size(); i++) {
+                Mat card = cards[i];
+                String closestCard;
+                getClosestCard(card, cardset, closestCard);
+                cout << "\nClosest card = " + closestCard << endl;
+            }
+        // Escape
+        } else if (key == 27)
+            break;
+
+    }
+    */
     /*
     // Create window
 
