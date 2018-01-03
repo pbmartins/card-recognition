@@ -1,5 +1,0 @@
-cmake_minimum_required(VERSION 2.8)
-project( save_corner )
-find_package( OpenCV REQUIRED )
-add_executable( save_corner save_corner.cpp )
-target_link_libraries( save_corner ${OpenCV_LIBS} )

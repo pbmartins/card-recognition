@@ -1,5 +1,0 @@
-cmake_minimum_required(VERSION 2.8)
-project( save_training_card )
-find_package( OpenCV REQUIRED )
-add_executable( save_training_card save_training_card.cpp )
-target_link_libraries( save_training_card ${OpenCV_LIBS} )
