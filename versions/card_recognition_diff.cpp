@@ -41,11 +41,16 @@ void preProcessImage(Mat &originalImage)
     GaussianBlur(originalImage, originalImage, Size(n, n), sigmaX);
 
     // Apply threshold
-    int thresholdValue = 150;
+    int thresholdValue = 130;
     int thresholdType = THRESH_BINARY;
     int maxValue = 255;
     threshold( originalImage, originalImage, 
             thresholdValue, maxValue, thresholdType);
+    
+    // Dilate image, to improve edges
+    Mat structuringElement = getStructuringElement(MORPH_RECT,
+                                       Size(5, 5));
+    dilate(originalImage, originalImage, structuringElement);
 }
 
 // From: https://stackoverflow.com/questions/13495207/opencv-c-sorting-contours-by-their-contourarea
@@ -56,7 +61,7 @@ bool reverseCompareContourArea(vector<Point> c1,
 }
 
 // Adapted from: https://www.pyimagesearch.com/2016/03/21/ordering-coordinates-clockwise-with-python-and-opencv/
-void orderPointsCC(const vector<Point2f> &points, Point2f* orderedPoints) 
+void orderPointsCC(const vector<Point> &points, Point2f* orderedPoints) 
 {
     int sMax = 0, sMin = 0, dMax = 0, dMin = 0;
     
@@ -95,7 +100,7 @@ void findContours(const Mat &image, int numCards,
 {
     //vector<Vec4i> hierarchy;
     Mat cannyOutput;
-    int mode = CV_RETR_TREE;
+    int mode = CV_RETR_CCOMP;
     int method = CV_CHAIN_APPROX_SIMPLE;
 
     Canny(image, cannyOutput, 120, 240);
@@ -124,17 +129,16 @@ void transformCardContours(const Mat &image, vector<Mat> &cards,
         vector<Point> approxCurve;
         approxPolyDP(points, approxCurve, epsilon, true);
         // Get rectangle of the minimum area
-        RotatedRect boxRect = minAreaRect(approxCurve);
+        Rect boxRect = boundingRect(approxCurve);
         
-        /* 
+        /*
         // Debug rect
         Mat drawing = image.clone();
         Scalar color = Scalar(128, 128, 128);
         // contour
-        //drawContours( drawing, cardsContours, i, color, 5, 8, vector<Vec4i>(), 0, Point() );
-        Point2f rect_points[4]; boxRect.points( rect_points );
+        drawContours( drawing, cardsContours, -1, color, 5, 8, vector<Vec4i>(), 0, Point() );
         for( int j = 0; j < 4; j++ )
-          line( drawing, rect_points[j], rect_points[(j+1)%4], color, 5, 8 );
+            line( drawing, approxCurve[j], approxCurve[(j+1)%4], color, 5, 8 );
          
         /// Show in a window
         namedWindow( "Contours", CV_WINDOW_AUTOSIZE );
@@ -155,18 +159,17 @@ void transformCardContours(const Mat &image, vector<Mat> &cards,
         dstVertices[2] = Point2f(449, 449);        
         dstVertices[3] = Point2f(0, 449);        
         
-        boxRect.points(srcVertices); 
-        
+        //boxRect.points(srcVertices); 
+
         // Order vertices counter clockwise
-        vector<Point2f> vertices(begin(srcVertices), end(srcVertices));
-        orderPointsCC(vertices, srcVertices);
+        orderPointsCC(approxCurve, srcVertices);
         
         // Get the transformation matrix
         Mat transform = getPerspectiveTransform(srcVertices, dstVertices);
         // Perform the transformation
         warpPerspective(image, card, transform, Size(450, 450));
         
-        imwrite("rotated.jpg", card);
+        //imwrite("rotated.jpg", card);
         
         cards.push_back(card);
     }
@@ -188,9 +191,6 @@ void getTrainingSet(const string path,
             
             // Pre-process image and save in dataset 
             preProcessImage(image);
-            // TODO: continue
-            vector<vector<Point> > cardsContours;
-            findContours(originalCard, numCards, cardsContours);
             cardDataset[filename] = image;
         }
     }
@@ -221,7 +221,7 @@ void getClosestCard(Mat &card, map<string, Mat> &cards,
         if (compare_card.size() != Size(450, 450))
             // Resize image to allow diff calculations 
             resize(compare_card, compare_card, Size(450, 450));
-
+        
         /*
         // Display difference
         namedWindow( "Imagem Original"+i, WINDOW_AUTOSIZE );
@@ -229,10 +229,10 @@ void getClosestCard(Mat &card, map<string, Mat> &cards,
         */
 
         if (!++i){
-            diff = countBinaryWhite(abs(compare_card - card));
+            diff = countBinaryWhite(abs(card - compare_card));
             cardName = it->first;
         } else {
-            tmpDiff = countBinaryWhite(abs(compare_card - card));
+            tmpDiff = countBinaryWhite(abs(card - compare_card));
             if (tmpDiff < diff) {
                 diff = tmpDiff;
                 cardName = it->first;
@@ -240,8 +240,6 @@ void getClosestCard(Mat &card, map<string, Mat> &cards,
         }
         it++;
     }
-
-
 }
 
 int main( int argc, char** argv )
@@ -260,6 +258,7 @@ int main( int argc, char** argv )
     map<string, Mat> cardset; 
     getTrainingSet("./training_set/", cardset);
 
+    /*
     Mat originalCard;
 
 	originalCard = imread( argv[1], IMREAD_UNCHANGED );
@@ -273,11 +272,9 @@ int main( int argc, char** argv )
     
     preProcessImage(originalCard);
     
-    /* 
     // Display transformation
     namedWindow("Transformed", WINDOW_AUTOSIZE );
     imshow("Transformed", originalCard);
-    */
 
     vector<vector<Point> > cardsContours;
     findContours(originalCard, numCards, cardsContours);
@@ -290,11 +287,11 @@ int main( int argc, char** argv )
         getClosestCard(card, cardset, closestCard);
 		cout << "\nClosest card = " + closestCard << endl;
     }
+    */
 
     //waitKey(0);
     //destroyAllWindows();
     
-    /*
     // Read camera
     
     // open default camera 
@@ -316,16 +313,18 @@ int main( int argc, char** argv )
         int key = waitKey(30);
         
         // Enter
-        if(key == 10) {
+        if(key == 13) {
             preProcessImage(frame);
+            
             // Display transformation
             namedWindow("Transformed", WINDOW_AUTOSIZE );
-            imshow("Transformed", originalCard);
+            imshow("Transformed", frame);
+            
             vector<vector<Point> > cardsContours;
             findContours(frame, numCards, cardsContours);
             vector<Mat> cards;
             transformCardContours(frame, cards, cardsContours);
-        
+            
             for (int i = 0; i < cards.size(); i++) {
                 Mat card = cards[i];
                 String closestCard;
@@ -337,7 +336,7 @@ int main( int argc, char** argv )
             break;
 
     }
-    */
+    
     /*
     // Create window
 

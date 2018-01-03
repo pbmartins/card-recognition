@@ -40,12 +40,18 @@ void preProcessImage(Mat &originalImage)
     double sigmaX = 100.0;
     GaussianBlur(originalImage, originalImage, Size(n, n), sigmaX);
 
+    // Compute good threshold level
+    double thresholdValue = originalImage.at<uchar>((int)(originalImage.rows / 2), 
+            (int)(originalImage.cols / 2)) - 30;
+    cout << thresholdValue << endl; 
     // Apply threshold
-    int thresholdValue = 150;
     int thresholdType = THRESH_BINARY;
     int maxValue = 255;
     threshold( originalImage, originalImage, 
             thresholdValue, maxValue, thresholdType);
+    namedWindow( "Contours", CV_WINDOW_AUTOSIZE );
+    imshow( "Contours", originalImage ); 
+    //waitKey(0);
 }
 
 // From: https://stackoverflow.com/questions/13495207/opencv-c-sorting-contours-by-their-contourarea
@@ -106,6 +112,7 @@ void findContours(const Mat &image, int numCards,
     findContours(cannyOutput, contours, mode, method, Point(0, 0));
     
     for (int i = 0; i < contours.size(); i++) {
+        size = contourArea(contours[i]);
         epsilon = 0.02 * arcLength(contours[i], true);
         approxPolyDP(contours[i], approxCurve, epsilon, true);
 
@@ -133,21 +140,13 @@ void transformCardContours(const Mat &image, vector<Mat> &cards,
         contour = cardsContours[i];
         
         // Compute approximation accuracy
-        vector<Point> approxCurve;
+        vector<Point2f> approxCurve;
         double epsilon = 0.02 * arcLength(contour, true);
         approxPolyDP(contour, approxCurve, epsilon, true);
         
         // Get bounding rectangle and dimensions
-        Rect boundRect = boundingRect(contour);
-        width = boundRect.width;
-        heigth = boundRect.heigth;
+        //Rect boundRect = boundingRect(contour);
         
-        for(int j = 0; j < 4; j++) {
-            centerX += boxRect
-        }
-
-        centerX = 
-
         /* 
         // Debug rect
         Mat drawing = image.clone();
@@ -173,25 +172,101 @@ void transformCardContours(const Mat &image, vector<Mat> &cards,
         
         // Vertices of the rect box 
         dstVertices[0] = Point2f(0, 0);
-        dstVertices[1] = Point2f(449, 0); 
-        dstVertices[2] = Point2f(449, 449);        
-        dstVertices[3] = Point2f(0, 449);        
-        
-        boxRect.points(srcVertices); 
+        dstVertices[1] = Point2f(199, 0); 
+        dstVertices[2] = Point2f(199, 299);        
+        dstVertices[3] = Point2f(0, 299);        
         
         // Order vertices counter clockwise
-        vector<Point2f> vertices(begin(srcVertices), end(srcVertices));
-        orderPointsCC(vertices, srcVertices);
+        orderPointsCC(approxCurve, srcVertices);
         
         // Get the transformation matrix
         Mat transform = getPerspectiveTransform(srcVertices, dstVertices);
         // Perform the transformation
-        warpPerspective(image, card, transform, Size(450, 450));
+        warpPerspective(image, card, transform, Size(200, 300));
         
-        imwrite("rotated.jpg", card);
+        if (card.channels() > 1)
+	        cvtColor(card, card, COLOR_BGR2GRAY, 1);
         
         cards.push_back(card);
     }
+}
+
+bool processCorner(const Mat &card, Mat &rank, Mat &suit)
+{
+    Rect roi;
+    
+    // Get corner area 
+    roi = Rect(Point(0, 0), Point(34, 84));
+    Mat cardCorner = card(roi);
+    resize(cardCorner, cardCorner, Point(0, 0), 4, 4);
+    
+    // Compute good threshold level
+    double white = card.at<uchar>(15, (int)((33 * 4) / 2));
+    double thresholdValue = white - 30 > 0 ? white - 30 : 1;
+    
+    // Apply threshold
+    int thresholdType = THRESH_BINARY;
+    threshold(cardCorner, cardCorner, thresholdValue, 255, thresholdType);
+        
+    // Get regions of interest
+    roi = Rect(Point(0, 0), Point(135, 200));
+    /*Mat drawing = cardCorner.clone();
+    rectangle(drawing, roi, Scalar(128, 128, 128));
+    namedWindow( "Imagem Original", WINDOW_AUTOSIZE );
+    imshow("Imagem Original", drawing);
+    */
+    rank = cardCorner(roi);
+    roi = Rect(Point(0, 180), Point(135, 336));
+    suit = cardCorner(roi); 
+    Rect box;
+    vector<vector<Point>> contours;
+    int mode = CV_RETR_TREE;
+    int method = CV_CHAIN_APPROX_SIMPLE;
+    
+    try {
+        // Rank processing
+        findContours(rank, contours, mode, method, Point(0, 0));
+        sort(contours.begin(), contours.end(), reverseCompareContourArea);
+
+        // Use largest contour to resize
+        box = boundingRect(contours[1]);
+        roi = Rect(Point(box.x, box.y), Point(box.x + box.width, box.y + box.height));
+        rank = rank(roi);
+        resize(rank, rank, Point(70, 125));
+
+        // Suit processing
+        findContours(suit, contours, mode, method, Point(0, 0));
+        sort(contours.begin(), contours.end(), reverseCompareContourArea);
+
+        // Use largest contour to resize
+        box = boundingRect(contours[1]);
+        roi = Rect(Point(box.x, box.y), Point(box.x + box.width, box.y + box.height));
+        
+        /*
+        Mat drawing = suit.clone();
+        rectangle(drawing, roi, Scalar(128, 128, 128));
+        namedWindow( "Imagem Original", WINDOW_AUTOSIZE );
+        imshow("Imagem Original", drawing);
+        for( int i = 0; i< contours.size(); i++ )
+        {
+            cout << i << endl;
+            drawContours( drawing, contours, i, Scalar(128, 128, 128), 2, 8);
+            imshow("Imagem Original", drawing);
+            waitKey(0);
+        }
+        */
+
+        
+        suit = suit(roi);
+        resize(suit, suit, Point(70, 100));
+    } catch (Exception e) {
+        return false;
+    }
+
+    imwrite("rank.jpg", rank);
+    imwrite("suit.jpg", suit);
+    
+    return true;
 }
 
 void getTrainingSet(const string path, 
@@ -206,13 +281,8 @@ void getTrainingSet(const string path,
         if (filename != "." and filename != "..") {
             filename = path + filename; 
             
-            Mat image = imread(filename);
+            Mat image = imread(filename, IMREAD_GRAYSCALE);
             
-            // Pre-process image and save in dataset 
-            preProcessImage(image);
-            // TODO: continue
-            vector<vector<Point> > cardsContours;
-            findContours(originalCard, numCards, cardsContours);
             cardDataset[filename] = image;
         }
     }
@@ -230,20 +300,41 @@ int countBinaryWhite(Mat card)
     return count;
 }
 
-void getClosestCard(Mat &card, map<string, Mat> &cards, 
-        String &cardName)
+void getClosestCard(Mat &cardRank, Mat &cardSuit, 
+        map<string, Mat> &ranks, map<string, Mat> &suits, 
+        string &cardName)
 {
     int i = -1;
     int diff, tmpDiff;
-    map<string, Mat>::iterator it = cards.begin();
+    string rank, suit;
+    map<string, Mat>::iterator it = ranks.begin();
 
-    while(it != cards.end()) {
-        Mat compare_card = it->second;
+    // Find closest rank
+    while(it != ranks.end()) {
         
-        if (compare_card.size() != Size(450, 450))
-            // Resize image to allow diff calculations 
-            resize(compare_card, compare_card, Size(450, 450));
+        /*
+        // Display difference
+        namedWindow( "Imagem Original"+i, WINDOW_AUTOSIZE );
+	    imshow("Imagem Original"+i, abs(cardRank - it->second));
+        */
 
+        if (!++i){
+            diff = countBinaryWhite(abs(cardRank - it->second));
+            rank = it->first;
+        } else {
+            tmpDiff = countBinaryWhite(abs(cardRank - it->second));
+            if (tmpDiff < diff) {
+                diff = tmpDiff;
+                rank = it->first;
+            }
+        }
+        it++;
+    }
+   
+    // Find closest suit
+    i = -1;
+    it = suits.begin();
+    while(it != suits.end()) {
         /*
         // Display difference
         namedWindow( "Imagem Original"+i, WINDOW_AUTOSIZE );
@@ -251,25 +342,32 @@ void getClosestCard(Mat &card, map<string, Mat> &cards,
         */
 
         if (!++i){
-            diff = countBinaryWhite(abs(compare_card - card));
-            cardName = it->first;
+            diff = countBinaryWhite(abs(cardSuit - it->second));
+            suit = it->first;
         } else {
-            tmpDiff = countBinaryWhite(abs(compare_card - card));
+            tmpDiff = countBinaryWhite(abs(cardSuit - it->second));
             if (tmpDiff < diff) {
                 diff = tmpDiff;
-                cardName = it->first;
+                suit = it->first;
             }
         }
         it++;
     }
 
-
+    cardName = rank + " of " + suit;
 }
 
 int main( int argc, char** argv )
 {
+
+    // Get dataset
+    int numCards = 1;
+    map<string, Mat> rankSet; 
+    map<string, Mat> suitSet; 
+    getTrainingSet("./sets/rank_set/", rankSet);
+    getTrainingSet("./sets/suit_set/", suitSet);
     
-    if( argc != 2 )
+    /*if( argc != 2 )
     {
 		cout << "The name of the image file is missing !!" << endl;
 
@@ -279,8 +377,10 @@ int main( int argc, char** argv )
     
     // Get dataset
     int numCards = 1;
-    map<string, Mat> cardset; 
-    getTrainingSet("./training_set/", cardset);
+    map<string, Mat> rankSet; 
+    map<string, Mat> suitSet; 
+    getTrainingSet("./sets/rank_set/", rankSet);
+    getTrainingSet("./sets/suit_set/", suitSet);
 
     Mat originalCard;
 
@@ -295,28 +395,28 @@ int main( int argc, char** argv )
     
     preProcessImage(originalCard);
     
-    /* 
     // Display transformation
     namedWindow("Transformed", WINDOW_AUTOSIZE );
     imshow("Transformed", originalCard);
-    */
 
     vector<vector<Point> > cardsContours;
     findContours(originalCard, numCards, cardsContours);
     vector<Mat> cards;
     transformCardContours(originalCard, cards, cardsContours);
     
+    Mat rank, suit;
     for (int i = 0; i < cards.size(); i++) {
         Mat card = cards[i];
-        String closestCard;
-        getClosestCard(card, cardset, closestCard);
+        processCorner(card, rank, suit);
+        string closestCard;
+        getClosestCard(rank, suit, rankSet, suitSet, closestCard);
 		cout << "\nClosest card = " + closestCard << endl;
     }
 
-    //waitKey(0);
-    //destroyAllWindows();
+    waitKey(0);
+    destroyAllWindows();
+    */ 
     
-    /*
     // Read camera
     
     // open default camera 
@@ -338,20 +438,22 @@ int main( int argc, char** argv )
         int key = waitKey(30);
         
         // Enter
-        if(key == 10) {
+        if(key == 13) {
             preProcessImage(frame);
-            // Display transformation
-            namedWindow("Transformed", WINDOW_AUTOSIZE );
-            imshow("Transformed", originalCard);
             vector<vector<Point> > cardsContours;
             findContours(frame, numCards, cardsContours);
             vector<Mat> cards;
             transformCardContours(frame, cards, cardsContours);
-        
-            for (int i = 0; i < cards.size(); i++) {
+            
+            Mat rank, suit;
+            int size = numCards < cards.size() ? numCards : cards.size();
+
+            for (int i = 0; i < size; i++) {
                 Mat card = cards[i];
-                String closestCard;
-                getClosestCard(card, cardset, closestCard);
+                if (!processCorner(card, rank, suit))
+                    continue;
+                string closestCard;
+                getClosestCard(rank, suit, rankSet, suitSet, closestCard);
                 cout << "\nClosest card = " + closestCard << endl;
             }
         // Escape
@@ -359,7 +461,6 @@ int main( int argc, char** argv )
             break;
 
     }
-    */
     /*
     // Create window
 
