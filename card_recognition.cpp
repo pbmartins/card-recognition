@@ -42,16 +42,19 @@ void preProcessImage(Mat &originalImage)
 
     // Compute good threshold level
     double thresholdValue = originalImage.at<uchar>((int)(originalImage.rows / 2), 
-            (int)(originalImage.cols / 2)) - 30;
+            (int)(originalImage.cols / 2)) - 15;
+    thresholdValue = 130;
     cout << thresholdValue << endl; 
     // Apply threshold
     int thresholdType = THRESH_BINARY;
     int maxValue = 255;
     threshold( originalImage, originalImage, 
             thresholdValue, maxValue, thresholdType);
-    namedWindow( "Contours", CV_WINDOW_AUTOSIZE );
-    imshow( "Contours", originalImage ); 
-    //waitKey(0);
+
+    int size = 2;
+    Mat element = getStructuringElement(MORPH_RECT, Size(size, size));
+
+    dilate(originalImage, originalImage, element);
 }
 
 // From: https://stackoverflow.com/questions/13495207/opencv-c-sorting-contours-by-their-contourarea
@@ -109,20 +112,20 @@ void findContours(const Mat &image, int numCards,
 
     Canny(image, cannyOutput, 120, 240);
 
-    findContours(cannyOutput, contours, mode, method, Point(0, 0));
-    
-    for (int i = 0; i < contours.size(); i++) {
+    findContours(cannyOutput, cardsContours, mode, method, Point(0, 0));
+
+    /*for (int i = 0; i < contours.size(); i++) {
         size = contourArea(contours[i]);
         epsilon = 0.02 * arcLength(contours[i], true);
         approxPolyDP(contours[i], approxCurve, epsilon, true);
 
-        if (size > 25000 && size < 120000 && approxCurve.size() == 4)
+        if (size > 25000 && size < 200000 && approxCurve.size() == 4)
             cardsContours.push_back(contours[i]);
-    }
+    }*/
 
     // Find the most common contours
     sort(cardsContours.begin(), cardsContours.end(), reverseCompareContourArea);
-    //cardsContours.resize(numCards);
+    cardsContours.resize(numCards);
 }
 
 void transformCardContours(const Mat &image, vector<Mat> &cards,
@@ -147,15 +150,17 @@ void transformCardContours(const Mat &image, vector<Mat> &cards,
         // Get bounding rectangle and dimensions
         //Rect boundRect = boundingRect(contour);
         
-        /* 
+         
         // Debug rect
+        /*
         Mat drawing = image.clone();
         Scalar color = Scalar(128, 128, 128);
         // contour
-        //drawContours( drawing, cardsContours, i, color, 5, 8, vector<Vec4i>(), 0, Point() );
-        Point2f rect_points[4]; boxRect.points( rect_points );
-        for( int j = 0; j < 4; j++ )
-          line( drawing, rect_points[j], rect_points[(j+1)%4], color, 5, 8 );
+        for (int j=0; i < cardsContours.size(); j++)
+            drawContours( drawing, cardsContours, j, color, 5, 8, vector<Vec4i>(), 0, Point() );
+        //Point2f rect_points[4]; boxRect.points( rect_points );
+        //for( int j = 0; j < 4; j++ )
+        //  line( drawing, rect_points[j], rect_points[(j+1)%4], color, 5, 8 );
          
         /// Show in a window
         namedWindow( "Contours", CV_WINDOW_AUTOSIZE );
@@ -196,7 +201,7 @@ bool processCorner(const Mat &card, Mat &rank, Mat &suit)
     Rect roi;
     
     // Get corner area 
-    roi = Rect(Point(0, 0), Point(34, 84));
+    roi = Rect(Point(0, 0), Point(32, 84));
     Mat cardCorner = card(roi);
     resize(cardCorner, cardCorner, Point(0, 0), 4, 4);
     
@@ -207,23 +212,41 @@ bool processCorner(const Mat &card, Mat &rank, Mat &suit)
     // Apply threshold
     int thresholdType = THRESH_BINARY;
     threshold(cardCorner, cardCorner, thresholdValue, 255, thresholdType);
-        
+    
+    Mat cols(cardCorner.rows, 10, CV_8U, Scalar(255, 255, 255));
+    if (cols.channels() > 1)
+        cvtColor( cols, cols, COLOR_BGR2GRAY );
+    hconcat(cardCorner, cols, cardCorner);
+
+
     // Get regions of interest
-    roi = Rect(Point(0, 0), Point(135, 200));
+    roi = Rect(Point(0, 0), Point(cardCorner.cols, 200));
     /*Mat drawing = cardCorner.clone();
     rectangle(drawing, roi, Scalar(128, 128, 128));
     namedWindow( "Imagem Original", WINDOW_AUTOSIZE );
     imshow("Imagem Original", drawing);
     */
     rank = cardCorner(roi);
-    roi = Rect(Point(0, 180), Point(135, 336));
-    suit = cardCorner(roi); 
+    roi = Rect(Point(0, 180), Point(cardCorner.cols, 336));
+
+    suit = cardCorner(roi);
+
+    Mat rows(20, suit.cols, CV_8U, Scalar(255, 255, 255));
+    if (rows.channels() > 1)
+        cvtColor( rows, rows, COLOR_BGR2GRAY );
+    vconcat(rows, suit, suit);
+
+
     Rect box;
     vector<vector<Point>> contours;
     int mode = CV_RETR_TREE;
     int method = CV_CHAIN_APPROX_SIMPLE;
     
     try {
+        int size = 4;
+        Mat element = getStructuringElement(MORPH_RECT, Size(size, size));
+        erode(rank, rank, element);
+
         // Rank processing
         findContours(rank, contours, mode, method, Point(0, 0));
         sort(contours.begin(), contours.end(), reverseCompareContourArea);
@@ -233,11 +256,11 @@ bool processCorner(const Mat &card, Mat &rank, Mat &suit)
         roi = Rect(Point(box.x, box.y), Point(box.x + box.width, box.y + box.height));
         rank = rank(roi);
         resize(rank, rank, Point(70, 125));
-
+        
         // Suit processing
         findContours(suit, contours, mode, method, Point(0, 0));
         sort(contours.begin(), contours.end(), reverseCompareContourArea);
-
+        
         // Use largest contour to resize
         box = boundingRect(contours[1]);
         roi = Rect(Point(box.x, box.y), Point(box.x + box.width, box.y + box.height));
@@ -263,8 +286,13 @@ bool processCorner(const Mat &card, Mat &rank, Mat &suit)
         return false;
     }
 
-    imwrite("rank.jpg", rank);
-    imwrite("suit.jpg", suit);
+    namedWindow( "rank", WINDOW_AUTOSIZE );
+    imshow("rank", rank);
+
+    namedWindow( "suit", WINDOW_AUTOSIZE );
+    imshow("suit", suit);
+    //imwrite("rank.jpg", rank);
+    //imwrite("suit.jpg", suit);
     
     return true;
 }
@@ -420,7 +448,7 @@ int main( int argc, char** argv )
     // Read camera
     
     // open default camera 
-    VideoCapture cap(1);
+    VideoCapture cap(0);
     
     if(!cap.isOpened())
         cout << "Could not read camera" << endl;
@@ -429,7 +457,7 @@ int main( int argc, char** argv )
     
     while(true)
     {
-        Mat frame;
+        Mat frame, originalFrame;
         // get a new frame from camera
         cap >> frame;
     
@@ -439,11 +467,12 @@ int main( int argc, char** argv )
         
         // Enter
         if(key == 13) {
+            originalFrame = frame.clone();
             preProcessImage(frame);
             vector<vector<Point> > cardsContours;
             findContours(frame, numCards, cardsContours);
             vector<Mat> cards;
-            transformCardContours(frame, cards, cardsContours);
+            transformCardContours(originalFrame, cards, cardsContours);
             
             Mat rank, suit;
             int size = numCards < cards.size() ? numCards : cards.size();
