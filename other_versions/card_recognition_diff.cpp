@@ -1,7 +1,5 @@
 /*
- * card_recognition.cpp
- *
- * CARD RECOGNITION
+ * CARD RECOGNITION (INTEGRAL CARD DIFFERENCE)
  *
  * Diogo Ferreira - Pedro Martins - 2017
  */
@@ -98,7 +96,6 @@ void orderPointsCC(const vector<Point> &points, Point2f* orderedPoints)
 void findContours(const Mat &image, int numCards,
         vector<vector<Point> > &cardsContours)
 {
-    //vector<Vec4i> hierarchy;
     Mat cannyOutput;
     int mode = CV_RETR_CCOMP;
     int method = CV_CHAIN_APPROX_SIMPLE;
@@ -131,20 +128,6 @@ void transformCardContours(const Mat &image, vector<Mat> &cards,
         // Get rectangle of the minimum area
         Rect boxRect = boundingRect(approxCurve);
         
-        /*
-        // Debug rect
-        Mat drawing = image.clone();
-        Scalar color = Scalar(128, 128, 128);
-        // contour
-        drawContours( drawing, cardsContours, -1, color, 5, 8, vector<Vec4i>(), 0, Point() );
-        for( int j = 0; j < 4; j++ )
-            line( drawing, approxCurve[j], approxCurve[(j+1)%4], color, 5, 8 );
-         
-        /// Show in a window
-        namedWindow( "Contours", CV_WINDOW_AUTOSIZE );
-        imshow( "Contours", drawing ); 
-        */
-        
         // Correct order 
         //  3--2
         //  |  |
@@ -168,8 +151,6 @@ void transformCardContours(const Mat &image, vector<Mat> &cards,
         Mat transform = getPerspectiveTransform(srcVertices, dstVertices);
         // Perform the transformation
         warpPerspective(image, card, transform, Size(450, 450));
-        
-        //imwrite("rotated.jpg", card);
         
         cards.push_back(card);
     }
@@ -222,12 +203,6 @@ void getClosestCard(Mat &card, map<string, Mat> &cards,
             // Resize image to allow diff calculations 
             resize(compare_card, compare_card, Size(450, 450));
         
-        /*
-        // Display difference
-        namedWindow( "Imagem Original"+i, WINDOW_AUTOSIZE );
-	    imshow("Imagem Original"+i, abs(compare_card - card));
-        */
-
         if (!++i){
             diff = countBinaryWhite(abs(card - compare_card));
             cardName = it->first;
@@ -245,62 +220,18 @@ void getClosestCard(Mat &card, map<string, Mat> &cards,
 int main( int argc, char** argv )
 {
     
-    if( argc != 2 )
-    {
-		cout << "The name of the image file is missing !!" << endl;
-
-        return -1;
-    }
-
-    
     // Get dataset
     int numCards = 1;
     map<string, Mat> cardset; 
-    getTrainingSet("./training_set/", cardset);
+    getTrainingSet("./sets/training_set/", cardset);
 
-    /*
-    Mat originalCard;
-
-	originalCard = imread( argv[1], IMREAD_UNCHANGED );
-
-	if( originalCard.empty() )
-	{
-		// NOT SUCCESSFUL : the data attribute is empty
-		cout << "Image file could not be open !!" << endl;
-	    return -1;
-	}
-    
-    preProcessImage(originalCard);
-    
-    // Display transformation
-    namedWindow("Transformed", WINDOW_AUTOSIZE );
-    imshow("Transformed", originalCard);
-
-    vector<vector<Point> > cardsContours;
-    findContours(originalCard, numCards, cardsContours);
-    vector<Mat> cards;
-    transformCardContours(originalCard, cards, cardsContours);
-    
-    for (int i = 0; i < cards.size(); i++) {
-        Mat card = cards[i];
-        String closestCard;
-        getClosestCard(card, cardset, closestCard);
-		cout << "\nClosest card = " + closestCard << endl;
-    }
-    */
-
-    //waitKey(0);
-    //destroyAllWindows();
-    
     // Read camera
-    
-    // open default camera 
     VideoCapture cap(1);
     
     if(!cap.isOpened())
         cout << "Could not read camera" << endl;
 
-    //namedWindow("Camera", 1);
+    namedWindow("Camera", 1);
     
     while(true)
     {
@@ -315,10 +246,6 @@ int main( int argc, char** argv )
         // Enter
         if(key == 13) {
             preProcessImage(frame);
-            
-            // Display transformation
-            namedWindow("Transformed", WINDOW_AUTOSIZE );
-            imshow("Transformed", frame);
             
             vector<vector<Point> > cardsContours;
             findContours(frame, numCards, cardsContours);
@@ -337,26 +264,5 @@ int main( int argc, char** argv )
 
     }
     
-    /*
-    // Create window
-
-    namedWindow( "Imagem Original", WINDOW_AUTOSIZE );
-
-	// Display image
-
-	imshow( "Imagem Original", originalImage );
-
-	// Print some image features
-
-	cout << "ORIGINAL IMAGE" << endl;
-
-    printImageFeatures( originalImage );
-
-    
-	// Destroy the windows
-
-	destroyAllWindows();
-    */
-
 	return 0;
 }

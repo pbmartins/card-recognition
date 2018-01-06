@@ -1,7 +1,5 @@
 /*
- * card_recognition.cpp
- *
- * CARD RECOGNITION
+ * CARD RECOGNITION (CORNER DETECTION)
  *
  * Diogo Ferreira - Pedro Martins - 2017
  */
