@@ -1,7 +1,5 @@
 /*
- * card_recognition.cpp
- *
- * CARD RECOGNITION
+ * CARD RECOGNITION (MATCH CONTOURS VERSION)
  *
  * Diogo Ferreira - Pedro Martins - 2017
  */
@@ -51,7 +49,6 @@ void preProcessImage(Mat &originalImage)
 void findContours(const Mat &image, int numCards,
         vector<vector<Point>> &cardsContours)
 {
-    //vector<Vec4i> hierarchy;
     Mat cannyOutput;
     int mode = CV_RETR_TREE;
     int method = CV_CHAIN_APPROX_SIMPLE;
@@ -95,9 +92,6 @@ void getClosestCard(vector<vector<Point>> &card, map<string, vector<vector<Point
 
     while(it != cards.end()) {
 
-		cout << it->first << endl;
-		cout << abs(card.size() - it->second.size())  << endl;
-        
         tmpDiff = 0;
         if (abs(card.size() - it->second.size()) < 200){
 
@@ -111,8 +105,6 @@ void getClosestCard(vector<vector<Point>> &card, map<string, vector<vector<Point
                 approxPolyDP(it->second[i], approxCurve2, epsilon2, true);
                 tmpDiff += matchShapes(approxCurve1, approxCurve2, CV_CONTOURS_MATCH_I1, 0);
             }
-            
-            cout << tmpDiff << endl;
             
             if (!++j){
                 diff = abs(tmpDiff);
@@ -134,56 +126,12 @@ void getClosestCard(vector<vector<Point>> &card, map<string, vector<vector<Point
 int main( int argc, char** argv )
 {
     
-    if( argc != 2 )
-    {
-		cout << "The name of the image file is missing !!" << endl;
-
-        return -1;
-    }
-
-    
     // Get dataset
     int numCards = 1;
     map<string, vector<vector<Point>>> cardset; 
-    getTrainingSet("./card_set/", cardset);
+    getTrainingSet("./sets/training_set/", cardset);
 
-    /*
-    Mat originalCard;
-
-	originalCard = imread( argv[1], IMREAD_UNCHANGED );
-
-	if( originalCard.empty() )
-	{
-		// NOT SUCCESSFUL : the data attribute is empty
-		cout << "Image file could not be open !!" << endl;
-	    return -1;
-	}
-    
-    preProcessImage(originalCard);
-    
-    // Display transformation
-    namedWindow("Transformed", WINDOW_AUTOSIZE );
-    imshow("Transformed", originalCard);
-
-    vector<vector<Point>> cardContours;
-    findContours(originalCard, numCards, cardContours);
-    //vector<Mat> cards;
-    //transformCardContours(originalCard, cards, cardsContours);
-    
-    //for (int i = 0; i < cards.size(); i++) {
-        //Mat card = cards[i];
-        String closestCard;
-        getClosestCard(cardContours, cardset, closestCard);
-		cout << "\nClosest card = " + closestCard << endl;
-    //}
-
-    waitKey(0);
-    destroyAllWindows();
-    */ 
-   
     // Read camera
-    
-    // open default camera 
     VideoCapture cap(1);
     
     if(!cap.isOpened())
@@ -194,7 +142,8 @@ int main( int argc, char** argv )
     while(true)
     {
         Mat frame;
-        // get a new frame from camera
+        
+        // Get a new frame from camera
         cap >> frame;
     
         imshow("Camera", frame);
@@ -204,21 +153,12 @@ int main( int argc, char** argv )
         // Enter
         if(key == 13) {
             preProcessImage(frame);
-            // Display transformation
-            /*namedWindow("Transformed", WINDOW_AUTOSIZE );
-            imshow("Transformed", originalCard);
-            */
+
             vector<vector<Point>> cardContours;
             findContours(frame, numCards, cardContours);
             Mat x = frame.clone();
             Scalar color = Scalar(128, 128, 128);
-            /*
-            for (int i = 0; i < cardContours.size(); i++) {
-                drawContours(x, cardContours, i, color, 5, 8, vector<Vec4i>(), 0, Point() );
-                namedWindow( "Contours", CV_WINDOW_AUTOSIZE );
-                imshow( "Contours", x );
-            }
-            */
+
             String closestCard;
             getClosestCard(cardContours, cardset, closestCard);
 		    cout << "\nClosest card = " + closestCard << endl;
@@ -228,26 +168,5 @@ int main( int argc, char** argv )
 
     }
     
-    /*
-    // Create window
-
-    namedWindow( "Imagem Original", WINDOW_AUTOSIZE );
-
-	// Display image
-
-	imshow( "Imagem Original", originalImage );
-
-	// Print some image features
-
-	cout << "ORIGINAL IMAGE" << endl;
-
-    printImageFeatures( originalImage );
-
-    
-	// Destroy the windows
-
-	destroyAllWindows();
-    */
-
 	return 0;
 }
