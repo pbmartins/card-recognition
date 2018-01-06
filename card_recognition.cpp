@@ -42,7 +42,7 @@ void preProcessImage(Mat &originalImage)
 
     // Apply OTSU threshold
     int thresholdType = THRESH_BINARY | THRESH_OTSU;
-    threshold( originalImage, originalImage, 0, 255, thresholdType);
+    threshold(originalImage, originalImage, 0, 255, thresholdType);
     
     // Dilate image to improve contours
     int size = 2;
@@ -123,7 +123,7 @@ void orderPoints(const vector<Point2f> &points, Point2f* orderedPoints,
     }
 }
 
-void findContours(const Mat &image, vector<vector<Point>> &cardsContours)
+void findCardsContours(const Mat &image, vector<vector<Point>> &cardsContours)
 {
     Mat cannyOutput;
     vector<vector<Point>> contours;
@@ -146,7 +146,7 @@ void findContours(const Mat &image, vector<vector<Point>> &cardsContours)
         epsilon = 0.02 * arcLength(contours[i], true);
         approxPolyDP(contours[i], approxCurve, epsilon, true);
 
-        // A contour is a card contour if it has a size between 25^3 and 25^4
+        // A contour is a card contour if it has a size between 25*10^3 and 25*10^4
         // if it hasn't a parent and its approximation has 4 points (closed contour)
         if (size > 25000 && size < 250000 && hierarchy[i][3] == -1
                && approxCurve.size() == 4)
@@ -183,7 +183,7 @@ void transformCardContours(const Mat &image, vector<Mat> &cards,
         /*
         // Debug rect
         Mat drawing = image.clone();
-        Scalar color = Scalar(128, 128, 128);
+        Scalar color = Scalar(64, 64, 64);
         // Draw contours
         for (int j=0; j < cardsContours.size(); j++)
             drawContours(drawing, cardsContours, j, color, 5, 8, vector<Vec4i>(), 0, Point());
@@ -242,7 +242,7 @@ bool processCorner(const Mat &card, Mat &rank, Mat &suit)
     element = getStructuringElement(MORPH_RECT, Size(size, size));
     dilate(cardCorner, cardCorner, element);
     
-    /*    
+    /*  
     // Display corner
     namedWindow("Threshold corner", WINDOW_AUTOSIZE);
     imshow("Threshold corner", cardCorner);
@@ -309,7 +309,7 @@ bool processCorner(const Mat &card, Mat &rank, Mat &suit)
     imshow("Rank", rank);
 
     namedWindow("Suit", WINDOW_AUTOSIZE );
-    imshow("suit", suit);
+    imshow("Suit", suit);
     */
 
     return true;
@@ -479,7 +479,7 @@ int main( int argc, char** argv )
 
         // Find frame contours
         vector<vector<Point>> cardsContours;
-        findContours(frame, cardsContours);
+        findCardsContours(frame, cardsContours);
         
         // Get cards in the image
         vector<Point> centers;
