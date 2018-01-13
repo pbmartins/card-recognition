@@ -14,9 +14,9 @@ make
 ./card_recognition
 ```
 
-![Card Recognition](https://i.imgur.com/lLi6Bmj.gif)
+![Card Recognition](https://i.imgur.com/lLi6Bmj.gif | width=100)
 
-You can also see the full [demo video](https://www.youtube.com/watch?v=9MMHAM-lwCs)
+You can also see the full [demo video](https://www.youtube.com/watch?v=9MMHAM-lwCs).
 
 Please make sure the camera is not in a very perspective view, otherwise cards
 may not me recognized. 
