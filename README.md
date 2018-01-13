@@ -14,7 +14,7 @@ make
 ./card_recognition
 ```
 
-![Card Recognition](https://i.imgur.com/lLi6Bmj.gif | width=100)
+![Card Recognition](https://i.imgur.com/lLi6Bmj.gif)
 
 You can also see the full [demo video](https://www.youtube.com/watch?v=9MMHAM-lwCs).
 
